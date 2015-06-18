@@ -1,0 +1,24 @@
+{
+  "manifest_version": 2,
+
+  "name": "Gesture",
+  "description": "Cool stuff",
+  "version": "0.1",
+
+  "permissions": [
+    "tabs"
+  ],
+
+  "background": {
+    "scripts": ["background.js"]
+  },
+
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["constants.js", "math.js", "draw.js"],
+      "css": ["draw.css"],
+      "run_at": "document_end"
+    }
+  ]
+}

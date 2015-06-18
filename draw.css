@@ -1,0 +1,10 @@
+.gestr-canvas {
+  position: fixed                   !important;
+  left: 0                           !important;
+  top: 0                            !important;
+  z-index: 99999                    !important;
+  pointer-events: none              !important;
+  background-color: transparent     !important;
+  margin: 0                         !important;
+  padding: 0                        !important;
+}
