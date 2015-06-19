@@ -27,3 +27,12 @@ chrome.runtime.onMessage.addListener(
     }
   }
 );
+
+chrome.browserAction.onClicked.addListener(function (tab) { //Fired when User Clicks ICON
+  chrome.windows.create({
+    type: "panel",
+    url: chrome.extension.getURL("testing.html")
+  }, function () {
+
+  });
+});

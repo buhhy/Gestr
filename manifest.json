@@ -9,6 +9,10 @@
     "tabs"
   ],
 
+  "browser_action": {
+    "default_icon": "testicon.png"
+  },
+
   "background": {
     "scripts": ["background.js"]
   },
@@ -16,8 +20,19 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["constants.js", "math.js", "draw.js"],
-      "css": ["draw.css"],
+      "js": [
+        "logic/constants.js",
+        "logic/math.js",
+        "logic/gesture.js",
+
+        "ui/canvas.js",
+        "ui/gesture-controller.js",
+
+        "content-script.js"
+      ],
+      "css": [
+        "content-style.css"
+      ],
       "run_at": "document_end"
     }
   ]

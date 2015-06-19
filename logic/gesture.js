@@ -1,6 +1,7 @@
-function RoughGesture(aOrigin) {
+function RoughGesture(aOrigin, debugPanel) {
   this.origin = aOrigin;
   this.points = [];
+  this.debugPanel = debugPanel;
 }
 
 
@@ -21,13 +22,22 @@ RoughGesture.prototype.render = function (aCanvas) {
   }
 }
 
+RoughGesture.prototype.build = function () {
+  var points = [];
+  for (var i = 1; i < this.points.length; i++)
+    points.push({ start: this.points[i - 1], end: this.points[i] });
+  if (this.debugPanel)
+    this.debugPanel.addStackItem(points);
+  return points;
+};
 
 
 
-function RefinedGesture(aRoughGesture) {
+
+function RefinedGesture(aRoughGesture, debugPanel) {
   this.vectors = [];
   this.origin = aRoughGesture.origin.copy();
-
+  this.debugPanel = debugPanel;
 
   var allvectors = [];
 
@@ -38,14 +48,21 @@ function RefinedGesture(aRoughGesture) {
         aRoughGesture.points[i + 1].subtract(aRoughGesture.points[i])));
   }
 
-  this.vectors =
-    // this.mergeParallelVectors(
-      this.removeInsignificantVectors(
-        this.mergeParallelVectors(
-          this.snapVectorsToDirections(allvectors)
-        )
-      )
-    // );
+  var results = this.snapVectorsToDirections(allvectors);
+  if (this.debugPanel)
+    debugPanel.addStackItem(this.toLines(results));
+
+  results = this.mergeParallelVectors(results);
+  if (this.debugPanel)
+    debugPanel.addStackItem(this.toLines(results));
+
+  results = this.removeInsignificantVectors(results);
+  if (this.debugPanel)
+    debugPanel.addStackItem(this.toLines(results));
+
+
+
+  this.vectors = results;
 }
 
 /**
@@ -232,6 +249,15 @@ RefinedGesture.prototype.render = function (aCanvas) {
   }
 };
 
+RefinedGesture.prototype.toLines = function (segments) {
+  return segments.map(function (segment) {
+    return {
+      start: segment.origin,
+      end: segment.origin.add(segment.direction)
+    };
+  });
+};
+
 
 
 
@@ -297,173 +323,3 @@ TranslatedGesture.prototype.parseAction = function (aGestureMap) {
 TranslatedGesture.prototype.hasActions = function () {
   return this.directions.length > 0;
 };
-
-
-
-
-
-
-function Canvas() {
-  this.canvasEl = document.createElement("canvas");
-  this.drawCtx = this.canvasEl.getContext("2d");
-  this.canvasEl.classList.add("gestr-canvas");
-  document.body.appendChild(this.canvasEl);
-
-  // canvas needs to be resized constantly...
-  window.addEventListener("resize", this.resize.bind(this));
-  this.resize();
-}
-
-
-Canvas.prototype.resize = function () {
-  this.canvasEl.width = window.innerWidth;
-  this.canvasEl.height = window.innerHeight;
-};
-
-Canvas.prototype.clearCanvas = function () {
-  this.drawCtx.clearRect(0, 0, this.canvasEl.width, this.canvasEl.height);
-};
-
-Canvas.prototype.drawline = function (p1, p2, aColor) {
-  // Default black line color
-  var color = aColor || "#000";
-
-  this.drawCtx.beginPath();
-  this.drawCtx.moveTo(p1.x, p1.y);
-  this.drawCtx.lineTo(p2.x, p2.y);
-  this.drawCtx.lineWidth = 2;
-  this.drawCtx.strokeStyle = color;
-  this.drawCtx.stroke();
-};
-
-
-
-
-
-
-function GestureController(aCanvas) {
-  this.canvas = aCanvas;
-  this.mousePos = new Vector(0, 0);
-  this.lastRightClickTime = 0;
-  this.currentRightClickTime = 0;
-  this.gestureReleaseTime = 0;
-
-  this.rightMouseDown = false;
-  this.timeoutHandler = undefined;
-  this.currentGesture = undefined;
-}
-
-
-GestureController.prototype.startGestureTimeout = function () {
-  var self = this;
-  self.timeoutHandler = setTimeout(function () {
-    self.endDrag(self.mousePos, true);
-  }, GESTURE_PAUSE_TIMEOUT);
-};
-
-GestureController.prototype.cancelGestureTimeout = function () {
-  clearTimeout(this.timeoutHandler);
-  this.timeoutHandler = undefined;
-};
-
-
-GestureController.prototype.beginDrag = function (aMousePos) {
-  this.canvas.clearCanvas();
-  this.mousePos = aMousePos;
-  this.rightMouseDown = true;
-  this.currentGesture = new RoughGesture(aMousePos.copy());
-
-  this.cancelGestureTimeout();
-  this.startGestureTimeout();
-};
-
-GestureController.prototype.endDrag = function (aMousePos, aIsCancelled) {
-  // this.canvas.clearCanvas();
-  this.rightMouseDown = false;
-
-  this.cancelGestureTimeout();
-
-  if (!aIsCancelled) {
-    this.currentGesture.render(this.canvas);
-    var refined = new RefinedGesture(this.currentGesture);
-    var translated = new TranslatedGesture(refined);
-    refined.render(this.canvas);
-    translated.render(this.canvas);
-    var action = translated.parseAction(ACTION_MAP)
-    if (action)
-      console.log(action);
-      // action(translated.origin.x, translated.origin.y);
-    if (translated.hasActions())
-      this.gestureReleaseTime = Date.now();
-  }
-};
-
-GestureController.prototype.continueDrag = function (aMousePos) {
-  var curTime = Date.now();
-
-  if (aMousePos.subtract(this.mousePos).length2() >= MOUSE_ROUNDING_TOLERANCE) {
-    // If outside the stationary threshold, break the gesture timeout
-    this.cancelGestureTimeout();
-  }
-
-  this.canvas.drawline(this.mousePos, aMousePos);
-  this.mousePos = aMousePos;
-  this.currentGesture.addPoint(aMousePos);
-
-  // TODO: might be inefficient
-  if (!this.timeoutHandler)
-    this.startGestureTimeout();
-};
-
-
-GestureController.prototype.updateLastRightClickTime = function () {
-  this.lastRightClickTime = this.currentRightClickTime;
-  this.currentRightClickTime = Date.now();
-};
-
-GestureController.prototype.lastRightClickInterval = function () {
-  return this.currentRightClickTime - this.lastRightClickTime;
-};
-
-
-
-
-
-
-
-var canvas = new Canvas();
-var gc = new GestureController(canvas);
-
-
-
-
-
-document.addEventListener("mousedown", function (aEvent) {
-  if (aEvent.which == 3) {
-    gc.updateLastRightClickTime();
-
-    // Start the dragging if user doesn't double click fast enough
-    if (!DOUBLE_RIGHT_CLICK_FOR_CONTEXT_MENU
-        || gc.lastRightClickInterval() > DOUBLE_RIGHT_CLICK_MENU_INTERVAL)
-      gc.beginDrag(new Vector(aEvent.clientX, aEvent.clientY));
-  }
-});
-
-document.addEventListener("mousemove", function (aEvent) {
-  if (gc.rightMouseDown)
-    gc.continueDrag(new Vector(aEvent.clientX, aEvent.clientY));
-});
-
-document.addEventListener("mouseup", function (aEvent) {
-  if (aEvent.which == 3)
-    gc.endDrag(new Vector(aEvent.clientX, aEvent.clientY), false);
-});
-
-document.addEventListener('contextmenu', function(aEvent) {
-  if (DOUBLE_RIGHT_CLICK_FOR_CONTEXT_MENU && gc.rightMouseDown)
-    // Prevent the context menu from opening if user doesn't double click fast enough
-    aEvent.preventDefault();
-  else if (Date.now() - gc.gestureReleaseTime <= DOUBLE_RIGHT_CLICK_MENU_INTERVAL)
-    // Prevent the context menu from opening if user just released the gesture
-    aEvent.preventDefault();
-});

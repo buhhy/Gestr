@@ -3,6 +3,10 @@ function Vector(aX, aY) {
   this.y = aY;
 }
 
+Vector.fromJson = function (json) {
+  return new Vector(json.x, json.y);
+}
+
 
 Vector.prototype.subtract = function (aVec2) {
   return new Vector(this.x - aVec2.x, this.y - aVec2.y);

@@ -1,0 +1,16 @@
+.debug-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.controller {
+  display: flex;
+  flex-direction: row;
+  margin: 2em auto 0;
+}
+
+.canvas {
+  width: 600px;
+  height: 600px;
+  margin: 0 auto;
+}
