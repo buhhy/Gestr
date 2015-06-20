@@ -18,6 +18,12 @@ function GestureDebugger(canvas, _forwardBtn, _backBtn) {
   });
 
   self.clearStackItems();
+  self.levelColors = [
+    "315DC4",
+    "A85400",
+    "35BA30",
+    "9C30BA"
+  ];
 }
 
 GestureDebugger.prototype.clearStackItems = function () {
@@ -34,14 +40,17 @@ GestureDebugger.prototype.setButtonStatus = function () {
     this._forwardBtn.disabled = this.currentPosition === this.drawStack.length - 1;
 };
 
-GestureDebugger.prototype.addStackItem = function (vectors) {
-  this.drawStack.push(vectors);
+GestureDebugger.prototype.addStackItem = function (vectors, level) {
+  this.drawStack.push({
+    lines: vectors,
+    level: level || 0
+  });
 
   if (!this.hasItems) {
     this.hasItems = true;
     this.newPosition(0);
   }
-  
+
   this.setButtonStatus();
 
   return vectors;
@@ -51,9 +60,16 @@ GestureDebugger.prototype.newPosition = function (index) {
   if (index >= 0 && index <= this.drawStack.length - 1
       && index != this.currentPosition) {
     var self = this;
+    var curItem = self.drawStack[index];
+    var curColor = "444";
+
+    if (curItem.level >= 0 && curItem.level < self.levelColors.length)
+      curColor = self.levelColors[curItem.level];
+
     self.canvas.clearCanvas();
-    self.drawStack[index].forEach(function (cur) {
-      self.canvas.drawline(cur.start, cur.end, "#0000ff");
+    curItem.lines.forEach(function (cur) {
+      self.canvas.drawCircle(cur.start, 3, "#" + curColor);
+      self.canvas.drawline(cur.start, cur.end, "#" + curColor);
     });
     self.currentPosition = index;
     this.setButtonStatus();

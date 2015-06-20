@@ -31,3 +31,14 @@ Canvas.prototype.drawline = function (p1, p2, aColor) {
   this.drawCtx.strokeStyle = color;
   this.drawCtx.stroke();
 };
+
+Canvas.prototype.drawCircle = function (point, radius, color) {
+  // Default black line color
+  var color = color || "#000";
+
+  this.drawCtx.beginPath();
+  this.drawCtx.arc(point.x, point.y, radius, 0, 2 * Math.PI, false);
+  this.drawCtx.fill();
+  this.drawCtx.fillStyle = color;
+  this.drawCtx.fill();
+};

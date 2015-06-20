@@ -27,7 +27,7 @@ RoughGesture.prototype.build = function () {
   for (var i = 1; i < this.points.length; i++)
     points.push({ start: this.points[i - 1], end: this.points[i] });
   if (this.debugPanel)
-    this.debugPanel.addStackItem(points);
+    this.debugPanel.addStackItem(points, 0);
   return points;
 };
 
@@ -50,17 +50,19 @@ function RefinedGesture(aRoughGesture, debugPanel) {
 
   var results = this.snapVectorsToDirections(allvectors);
   if (this.debugPanel)
-    debugPanel.addStackItem(this.toLines(results));
+    this.debugPanel.addStackItem(this.toLines(results), 1);
 
   results = this.mergeParallelVectors(results);
   if (this.debugPanel)
-    debugPanel.addStackItem(this.toLines(results));
+    this.debugPanel.addStackItem(this.toLines(results), 2);
 
   results = this.removeInsignificantVectors(results);
   if (this.debugPanel)
-    debugPanel.addStackItem(this.toLines(results));
+    this.debugPanel.addStackItem(this.toLines(results), 3);
 
-
+  results = this.fixSegmentOrigins(results);
+  if (this.debugPanel)
+    this.debugPanel.addStackItem(this.toLines(results), 3);
 
   this.vectors = results;
 }
@@ -94,46 +96,35 @@ RefinedGesture.prototype.snapVectorsToDirections = function (aVecs) {
  * @param  {[type]}
  * @return {[type]}
  */
-RefinedGesture.prototype.mergeParallelVectors = function (aVecs) {
-  var newVec = [];
-  var lastPos = undefined;
-  var lastDir = new Vector(0, 0);
+RefinedGesture.prototype.mergeParallelVectors = function (segments) {
+  if (segments.length === 0)
+    return [];
 
-  // Simplify vectors to one of 4 directions, then combine all parallel vectors
-  for (var i = 0; i < aVecs.length; i++) {
-    var cur = aVecs[i];
-    var curDir = cur.direction;
+  var processedArray = [ segments[0] ];
 
-    var dot = lastDir.dot(curDir);
+  // Merge all parallel vectors
+  for (var i = 1; i < segments.length; i++) {
+    var last = processedArray.pop();
+    var cur = segments[i];
 
-    if (dot > 0 && compE(dot * dot, lastDir.length2() * curDir.length2())) {
-      // Same direction, just append to current direction
-      lastDir.x += curDir.x;
-      lastDir.y += curDir.y;
+    // If cross product is 0, then parallel
+    if (compE(cur.cross(last), 0)) {
+      processedArray.push(new Segment(last.origin, last.direction.add(cur.direction)));
     } else {
-      // Change in direction, create new vector
-      if (lastDir.length2() > 0)
-        newVec.push(new Segment(lastPos, lastDir.copy()));
-
-      lastPos = cur.origin.copy();
-      lastDir.x = curDir.x;
-      lastDir.y = curDir.y;
+      processedArray.push(last);
+      processedArray.push(cur);
     }
   }
 
-  // The above loop doesn't account for the last line segment
-  if (lastPos !== undefined)
-    newVec.push(new Segment(lastPos.copy(), lastDir.copy()));
-
-  return newVec;
+  return processedArray;
 };
 
 /**
  * Remove all vectors that are insignificant compared to the average vector magnitude.
  * Immutable
  */
-RefinedGesture.prototype.removeInsignificantVectors = function (aVecs) {
-  if (aVecs.length === 0)
+RefinedGesture.prototype.removeInsignificantVectors = function (segments) {
+  if (segments.length === 0)
     return [];
 
   /**
@@ -145,101 +136,80 @@ RefinedGesture.prototype.removeInsignificantVectors = function (aVecs) {
 
   // Build list of indices pointing to a vector in the input array.
   var vectorIndices = [];
-  for (var i = 0; i < aVecs.length; i++)
+  for (var i = 0; i < segments.length; i++)
     vectorIndices.push(i);
 
   // Sort the list of indices based on the magnitude of the vector.
   vectorIndices.sort(function (i1, i2) {
-    return aVecs[i2].direction.length2() - aVecs[i1].direction.length2();
+    return segments[i2].direction.length2() - segments[i1].direction.length2();
   });
 
   var tolerance2 = VECTOR_MAGNITUDE_TOLERANCE * VECTOR_MAGNITUDE_TOLERANCE;
   var sigVecCount = 0;
   var totalSize2 = 0;
+  var threshold = 10000000;
 
   // Since the list of input vectors are sorted longest first, for any sigVecCount, all vectors
   // before the sigVecCount index must be significant. Keep checking until a vector is counted as
   // insignificant. This indicates any following vectors will be insignificant as well.
   do {
-    totalSize2 += aVecs[vectorIndices[sigVecCount]].direction.length2();
+    totalSize2 += segments[vectorIndices[sigVecCount]].direction.length2();
     sigVecCount ++;
     if (sigVecCount >= vectorIndices.length)
       break;
-    var threshold = tolerance2 * (totalSize2 / (sigVecCount * sigVecCount));
-    if (aVecs[vectorIndices[sigVecCount]].direction.length2() < threshold)
+    threshold = tolerance2 * (totalSize2 / (sigVecCount * sigVecCount));
+    if (segments[vectorIndices[sigVecCount]].direction.length2() < threshold)
       break;
   } while (1);
 
-  var swappedArray = aVecs.map(function (vec, index) {
-    return {
-      id: index,
-      vec: vec
-    };
-  });
-  // Run a merging algorithm on the insignificant vectors
-  var insignificantVectorIds = {};
+  // Copy array for manipulation
+  var swappedArray = segments.slice(0);
+  var swapsDone = false;
+  var maxCount = 0;   // Just so any bugs won't freeze the browser
 
-  vectorIndices.slice(sigVecCount).map(function (index) {
-    return swappedArray[index].id;
-  }).forEach(function (id) {
-    insignificantVectorIds[id] = true;
-  });
+  do {
+    swapsDone = false;
 
-  var acceptedVectors = [];
+    // Do swaps of insignificant vectors
+    for (var i = 0; i < swappedArray.length - 1; i++) {
+      var item = swappedArray[i];
+      // If insignificant, swap with next vector
+      if (item.length2()  <= threshold) {
+        swappedArray[i] = swappedArray[i + 1];
+        swappedArray[i + 1] = item;
 
-  if (swappedArray.length > 1) {
-    if (!insignificantVectorIds[swappedArray[0].id])
-      acceptedVectors.push(swappedArray[0].vec);
-    if (!insignificantVectorIds[swappedArray[swappedArray.length - 1].id])
-      acceptedVectors.push(swappedArray[swappedArray.length - 1].vec);
-
-    for (var i = 1; i < swappedArray.length - 1; i++) {
-      var elem = swappedArray[i];
-      if (insignificantVectorIds[elem.id]) {
-        var prevElem = swappedArray[i - 1];
-        var nextElem = swappedArray[i + 1];
-
-        if (insignificantVectorIds[prevElem.id] && insignificantVectorIds[nextElem.id]) {
-          acceptedVectors.push(prevElem.vec.addDirection(nextElem.vec.direction));
-        } else if (insignificantVectorIds[prevElem.id]) {
-          acceptedVectors.push(prevElem.vec.addDirection(nextElem.vec.direction));
-          acceptedVectors.push(elem.vec);
-        } else if (insignificantVectorIds[nextElem.id]) {
-          acceptedVectors.push(elem.vec);
-          acceptedVectors.push(prevElem.vec.addDirection(nextElem.vec.direction));
-        } else {
-          acceptedVectors.push(prevElem.vec.addDirection(nextElem.vec.direction));
-          acceptedVectors.push(elem.vec);
-        }
-      } else {
-        acceptedVectors.push(elem.vec);
+        // Skip the next 2 because for sure the next two elements in the array will be parallel and
+        // be merged eventually.
+        i += 2;
+        swapsDone = true;
       }
     }
-  } else {
-    acceptedVectors = swappedArray[0].vec;
-  }
 
-  return acceptedVectors;
+    maxCount ++;
+    swappedArray = this.mergeParallelVectors(swappedArray);
 
-  // // Convert the vector indices back to actual vectors
-  // var significantVectors = vectorIndices
-  //     .slice(0, sigVecCount)
-  //     .sort(function (i1, i2) {
-  //       // Sort by index ascending
-  //       return i1 - i2;
-  //     })
-  //     .map(function (aElem) {
-  //       // Convert index back to vector
-  //       return aVecs[aElem];
-  //     });
+    if (this.debugPanel)
+      this.debugPanel.addStackItem(this.toLines(swappedArray), -1);
+  } while (swapsDone && maxCount <= 20);
 
-  // console.log("all: " + aVecs.length + ", significant: " + significantVectors.length);
+  // The last segment can't be swapped, so needs to be removed if it is insignificant
+  var lastElem = swappedArray.pop();
+  if (lastElem.length2() > threshold)
+    swappedArray.push(lastElem);
 
-  // /**
-  //  * Do some form of merging algorithm in the future.
-  //  */
+  return swappedArray;
+};
 
-  // return significantVectors;
+RefinedGesture.prototype.fixSegmentOrigins = function (segments) {
+  if (segments.length === 0)
+    return [];
+
+  var realOrigin = segments[0].origin;
+  return segments.map(function (segment) {
+    var newSegment = new Segment(realOrigin, segment.direction);
+    realOrigin = realOrigin.add(segment.direction);
+    return newSegment;
+  });
 };
 
 RefinedGesture.prototype.render = function (aCanvas) {

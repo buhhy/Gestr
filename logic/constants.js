@@ -28,7 +28,7 @@ var MOUSE_ROUNDING_TOLERANCE = 2;
 
 // Vectors with a small relative magnitude need to be filtered out for noise. Higher means more
 // aggressive optimization, lower means more noise.
-var VECTOR_MAGNITUDE_TOLERANCE = 0.25;
+var VECTOR_MAGNITUDE_TOLERANCE = 0.3;
 
 var ERROR = 1E-5;
 

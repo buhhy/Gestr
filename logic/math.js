@@ -36,6 +36,10 @@ Vector.prototype.dot = function (aVec) {
   return this.x * aVec.x + this.y * aVec.y;
 };
 
+Vector.prototype.cross = function (aVec) {
+  return this.x * aVec.y + this.y * aVec.x;
+};
+
 Vector.prototype.normalize = function () {
   var length = Math.sqrt(this.length2());
   return new Vector(this.x / length, this.y / length);
@@ -48,4 +52,16 @@ function Segment(aOrigin, aVector) {
 
 Segment.prototype.addDirection = function (aDirection) {
   return new Segment(this.origin, this.direction.add(aDirection));
+};
+
+Segment.prototype.length2 = function () {
+  return this.direction.length2();
+};
+
+Segment.prototype.dot = function (segment) {
+  return this.direction.dot(segment.direction);
+};
+
+Segment.prototype.cross = function (segment) {
+  return this.direction.cross(segment.direction);
 };
