@@ -86,19 +86,23 @@ var initPage = function () {
   var canvas = new Canvas(document.getElementById("debugCanvas"));
   var _nextBtn = document.getElementById("btnBack");
   var _backBtn = document.getElementById("btnNext");
+  var _recalcBtn = document.getElementById("btnRecalculate");
+  var _title = document.getElementById("title");
 
   var size = canvas.size();
-  var offset = new Vector(10, 10);
+  var offset = new Vector(75, 75);
 
-  var debugPanel = new GestureDebugger(canvas, _backBtn, _nextBtn);
+  var debugPanel = new GestureDebugger(canvas, _backBtn, _nextBtn, _recalcBtn, _title);
 
-  var rough = new RoughGesture(new Vector(0, 0), debugPanel);
-  offsetAndScaleGesture(testData1, size, offset).forEach(function (point) {
-    rough.addPoint(point);
+  chrome.extension.onMessage.addListener(function (msg, sender, sendResponse) {
+    if (msg.action === "setGestureData") {
+      var origin = new Vector(msg.origin.x, msg.origin.y);
+      var points = msg.points.map(function (point) {
+        return new Vector(point.x, point.y);
+      });
+      debugPanel.setPointData(origin, offsetAndScaleGesture(points, size, offset));
+    }
   });
-  rough.build();
-
-  var refined = new RefinedGesture(rough, debugPanel);
 };
 
 document.addEventListener('DOMContentLoaded', initPage);

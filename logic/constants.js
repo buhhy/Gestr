@@ -28,7 +28,7 @@ var MOUSE_ROUNDING_TOLERANCE = 2;
 
 // Vectors with a small relative magnitude need to be filtered out for noise. Higher means more
 // aggressive optimization, lower means more noise.
-var VECTOR_MAGNITUDE_TOLERANCE = 0.3;
+var VECTOR_MAGNITUDE_TOLERANCE = 0.22;
 
 var ERROR = 1E-5;
 
@@ -167,6 +167,10 @@ var ACTION_MAP = [
 
 function compE(v1, v2) {
   return Math.abs(v1 - v2) <= ERROR;
+}
+
+function compLt(v1, v2) {
+  return v1 < v2 - ERROR;
 }
 
 function sum(aArray) {

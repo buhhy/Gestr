@@ -44,12 +44,15 @@ GestureController.prototype.endDrag = function (aMousePos, aIsCancelled) {
     this.currentGesture.render(this.canvas);
     var refined = new RefinedGesture(this.currentGesture);
     var translated = new TranslatedGesture(refined);
+
     refined.render(this.canvas);
     translated.render(this.canvas);
     var action = translated.parseAction(ACTION_MAP)
-    if (action)
+
+    if (action) {
       console.log(action);
-      // action(translated.origin.x, translated.origin.y);
+      action(translated.origin.x, translated.origin.y);
+    }
     if (translated.hasActions())
       this.gestureReleaseTime = Date.now();
   }
@@ -80,4 +83,8 @@ GestureController.prototype.updateLastRightClickTime = function () {
 
 GestureController.prototype.lastRightClickInterval = function () {
   return this.currentRightClickTime - this.lastRightClickTime;
+};
+
+GestureController.prototype.getLastGesture = function () {
+  return this.currentGesture;
 };

@@ -1,7 +1,6 @@
-function RoughGesture(aOrigin, debugPanel) {
+function RoughGesture(aOrigin) {
   this.origin = aOrigin;
   this.points = [];
-  this.debugPanel = debugPanel;
 }
 
 
@@ -23,48 +22,52 @@ RoughGesture.prototype.render = function (aCanvas) {
 }
 
 RoughGesture.prototype.build = function () {
-  var points = [];
-  for (var i = 1; i < this.points.length; i++)
-    points.push({ start: this.points[i - 1], end: this.points[i] });
-  if (this.debugPanel)
-    this.debugPanel.addStackItem(points, 0);
-  return points;
+  var segments = [];
+
+  // Get vectors and initial points from the rough gesture
+  for (var i = 0; i < this.points.length - 1; i++) {
+    segments.push(new Segment(
+        this.points[i].copy(),
+        this.points[i + 1].subtract(this.points[i])));
+  }
+
+  return segments;
 };
 
 
 
 
-function RefinedGesture(aRoughGesture, debugPanel) {
+function RefinedGesture(roughGesture, debugPanel) {
+  this.parallelThreshold = Math.cos(50.0/180.0 * Math.PI);
   this.vectors = [];
-  this.origin = aRoughGesture.origin.copy();
+  this.origin = roughGesture.origin.copy();
   this.debugPanel = debugPanel;
 
-  var allvectors = [];
-
-  // Get vectors and initial points from the rough gesture
-  for (var i = 0; i < aRoughGesture.points.length - 1; i++) {
-    allvectors.push(new Segment(
-        aRoughGesture.points[i].copy(),
-        aRoughGesture.points[i + 1].subtract(aRoughGesture.points[i])));
-  }
-
-  var results = this.snapVectorsToDirections(allvectors);
+  var segments = roughGesture.build();
   if (this.debugPanel)
-    this.debugPanel.addStackItem(this.toLines(results), 1);
+    this.debugPanel.addStackItem(segments, 0, "Original Points");
 
-  results = this.mergeParallelVectors(results);
+  segments = this.mergeParallelVectors(segments, this.parallelThreshold);
   if (this.debugPanel)
-    this.debugPanel.addStackItem(this.toLines(results), 2);
+    this.debugPanel.addStackItem(segments, 1, "Preliminary Merge");
 
-  results = this.removeInsignificantVectors(results);
+  segments = this.snapVectorsToDirections(segments);
   if (this.debugPanel)
-    this.debugPanel.addStackItem(this.toLines(results), 3);
+    this.debugPanel.addStackItem(segments, 1, "Segment Snap");
 
-  results = this.fixSegmentOrigins(results);
+  segments = this.mergeParallelVectors(segments);
   if (this.debugPanel)
-    this.debugPanel.addStackItem(this.toLines(results), 3);
+    this.debugPanel.addStackItem(segments, 1, "Secondary Merge");
 
-  this.vectors = results;
+  segments = this.removeInsignificantVectors(segments);
+  if (this.debugPanel)
+    this.debugPanel.addStackItem(segments, 2, "Post Significance Merge");
+
+  segments = this.fixSegmentOrigins(segments);
+  if (this.debugPanel)
+    this.debugPanel.addStackItem(segments, 3, "Final Result");
+
+  this.vectors = segments;
 }
 
 /**
@@ -96,7 +99,10 @@ RefinedGesture.prototype.snapVectorsToDirections = function (aVecs) {
  * @param  {[type]}
  * @return {[type]}
  */
-RefinedGesture.prototype.mergeParallelVectors = function (segments) {
+RefinedGesture.prototype.mergeParallelVectors = function (segments, threshold) {
+
+  var threshold = threshold || 1;
+
   if (segments.length === 0)
     return [];
 
@@ -108,11 +114,18 @@ RefinedGesture.prototype.mergeParallelVectors = function (segments) {
     var cur = segments[i];
 
     // If cross product is 0, then parallel
-    if (compE(cur.cross(last), 0)) {
-      processedArray.push(new Segment(last.origin, last.direction.add(cur.direction)));
-    } else {
+    var cos = cur.dot(last) / Math.sqrt(cur.length2() * last.length2());
+
+    if (compLt(cos, threshold)) {
       processedArray.push(last);
       processedArray.push(cur);
+    } else if (compE(cos, 1.0)) {
+      processedArray.push(new Segment(last.origin, last.direction.add(cur.direction)));
+    } else {
+      processedArray.push(
+          new Segment(
+              last.origin,
+              last.direction.add(cur.direction.projectOnto(last.direction))));
     }
   }
 
@@ -147,7 +160,7 @@ RefinedGesture.prototype.removeInsignificantVectors = function (segments) {
   var tolerance2 = VECTOR_MAGNITUDE_TOLERANCE * VECTOR_MAGNITUDE_TOLERANCE;
   var sigVecCount = 0;
   var totalSize2 = 0;
-  var threshold = 10000000;
+  var threshold = 0;
 
   // Since the list of input vectors are sorted longest first, for any sigVecCount, all vectors
   // before the sigVecCount index must be significant. Keep checking until a vector is counted as
@@ -167,6 +180,7 @@ RefinedGesture.prototype.removeInsignificantVectors = function (segments) {
   var swapsDone = false;
   var maxCount = 0;   // Just so any bugs won't freeze the browser
 
+  // Run a simple forward merge algorithm
   do {
     swapsDone = false;
 
@@ -186,10 +200,10 @@ RefinedGesture.prototype.removeInsignificantVectors = function (segments) {
     }
 
     maxCount ++;
-    swappedArray = this.mergeParallelVectors(swappedArray);
+    swappedArray = this.mergeParallelVectors(swappedArray, 1);
 
     if (this.debugPanel)
-      this.debugPanel.addStackItem(this.toLines(swappedArray), -1);
+      this.debugPanel.addStackItem(swappedArray, -1, "Merge Algorithm");
   } while (swapsDone && maxCount <= 20);
 
   // The last segment can't be swapped, so needs to be removed if it is insignificant
@@ -217,15 +231,6 @@ RefinedGesture.prototype.render = function (aCanvas) {
     var cur = this.vectors[i];
     aCanvas.drawline(cur.origin, cur.origin.add(cur.direction), "#0000ff");
   }
-};
-
-RefinedGesture.prototype.toLines = function (segments) {
-  return segments.map(function (segment) {
-    return {
-      start: segment.origin,
-      end: segment.origin.add(segment.direction)
-    };
-  });
 };
 
 

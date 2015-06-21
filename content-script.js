@@ -41,6 +41,23 @@ var gestrInit = function () {
       // Prevent the context menu from opening if user just released the gesture
       aEvent.preventDefault();
   });
+
+  chrome.extension.onMessage.addListener(function (msg, sender, sendResponse) {
+    if (msg.action === "getLastGesture") {
+      var lastGesture = gc.getLastGesture();
+      if (lastGesture) {
+        sendResponse({
+          hasData: true,
+          points: lastGesture.points,
+          origin: lastGesture.origin
+        });
+      } else {
+        sendResponse({
+          hasData: false
+        });
+      }
+    }
+  });
 };
 
 gestrInit();

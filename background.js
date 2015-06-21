@@ -28,11 +28,21 @@ chrome.runtime.onMessage.addListener(
   }
 );
 
-chrome.browserAction.onClicked.addListener(function (tab) { //Fired when User Clicks ICON
-  chrome.windows.create({
-    type: "panel",
-    url: chrome.extension.getURL("testing.html")
-  }, function () {
-
+chrome.browserAction.onClicked.addListener(function (tab) { // Fired when user clicks ICON
+  chrome.tabs.sendMessage(tab.id, {
+    action: "getLastGesture"
+  }, function (response) {
+    chrome.windows.create({
+      type: "panel",
+      url: chrome.extension.getURL("testing.html")
+    }, function (window) {
+      if (response.hasData) {
+        chrome.tabs.sendMessage(window.tabs[0].id, {
+          action: "setGestureData",
+          origin: response.origin,
+          points: response.points
+        });
+      }
+    });
   });
 });

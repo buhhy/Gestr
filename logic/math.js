@@ -45,6 +45,10 @@ Vector.prototype.normalize = function () {
   return new Vector(this.x / length, this.y / length);
 };
 
+Vector.prototype.projectOnto = function (vec) {
+  return vec.multiply(this.dot(vec) / vec.dot(vec));
+};
+
 function Segment(aOrigin, aVector) {
   this.origin = aOrigin;
   this.direction = aVector;
