@@ -214,6 +214,10 @@ RefinedGesture.prototype.removeInsignificantVectors = function (segments) {
   return swappedArray;
 };
 
+/**
+ * Sets the origins of the segment list to create a contiguous line.
+ * Immutable
+ */
 RefinedGesture.prototype.fixSegmentOrigins = function (segments) {
   if (segments.length === 0)
     return [];
